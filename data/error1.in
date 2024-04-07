@@ -10,6 +10,10 @@ var
     // identifier starts with a digit
     9b: integer; 
 
+    // Missing semicolon
+    d: integer
+
+
 begin 
     // invalid integer literal
     i := 01; 

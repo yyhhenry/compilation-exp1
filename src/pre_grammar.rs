@@ -77,12 +77,14 @@ impl PreGrammar {
                             }
                             _ => {
                                 self.push_error("Expected identifier");
+                                continue;
                             }
                         }
                     }
 
                     if self.lexer.peek_token() != Some(Token::Colon) {
                         self.push_error("Expected colon");
+                        continue;
                     }
                     self.push_token();
 
@@ -92,11 +94,13 @@ impl PreGrammar {
                         }
                         _ => {
                             self.push_error("Expected type");
+                            continue;
                         }
                     }
 
                     if self.lexer.peek_token() != Some(Token::SemiColon) {
                         self.push_error("Expected semicolon");
+                        continue;
                     }
                     self.push_token();
                 }
@@ -128,6 +132,7 @@ impl PreGrammar {
                 Token::End => {
                     if layer == 0 {
                         self.push_error("Unexpected end");
+                        continue;
                     }
                     if layer == 1 {
                         should_finish = true;
