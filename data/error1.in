@@ -12,6 +12,7 @@ var
 
     // Missing semicolon
     d: integer
+    dd: integer;
 
 
 begin 
