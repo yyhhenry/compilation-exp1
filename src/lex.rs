@@ -185,7 +185,7 @@ impl Lexer {
                     "end" => Token::End,
                     "and" => Token::And,
                     "or" => Token::Or,
-                    _ => Token::Ident(ident),
+                    ident => Token::Ident(ident.to_string()),
                 };
                 return result(token);
             } else if c.is_numeric() {
