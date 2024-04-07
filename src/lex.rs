@@ -126,7 +126,11 @@ impl Lexer {
         }
     }
     pub fn peek_token(&self) -> Option<Token> {
-        let mut lexer = self.clone();
+        let mut lexer = Self {
+            input: self.input.clone(),
+            pos: self.pos,
+            errors: Vec::new(),
+        };
         lexer.consume_token().map(|t| t.token)
     }
     pub fn peek_pos(&self) -> usize {
