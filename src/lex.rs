@@ -78,7 +78,7 @@ pub enum Token {
 
     // Literals and Identifiers
     Ident(String),
-    Int(i32),
+    Int(String),
 }
 impl Token {
     pub fn is_type(&self) -> bool {
@@ -199,10 +199,7 @@ impl Lexer {
                 if num.starts_with('0') && num.len() > 1 {
                     self.push_error_pos(start, "Number cannot start with 0");
                 }
-                match num.parse() {
-                    Ok(num) => return result(Token::Int(num)),
-                    Err(_) => self.push_error_pos(start, "Invalid number or out of range"),
-                };
+                return result(Token::Int(num));
             } else {
                 match c {
                     '+' => {

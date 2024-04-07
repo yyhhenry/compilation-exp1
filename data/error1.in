@@ -21,6 +21,4 @@ begin
     // undeclared identifier
     c := 3;
 
-    // Outrange integer literal
-    i := 2147483648;
 end 
