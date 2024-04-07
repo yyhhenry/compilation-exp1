@@ -1,0 +1,12 @@
+var
+    i: integer;
+    i: integer; // duplicate identifier
+    a#: integer; // invalid character
+    9b: integer; // identifier starts with a digit
+    integer: real; // expected identifier
+
+begin 
+    i := 01; // invalid integer literal
+    i := 2;
+    c := 3; // undeclared identifier
+end 

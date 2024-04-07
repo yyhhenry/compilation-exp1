@@ -4,16 +4,20 @@ pub struct OffsetError {
     pub msg: String,
 }
 #[derive(Debug, Clone)]
-pub struct LinePos<'a> {
-    content: &'a str,
+pub struct LinePos {
+    content: Vec<char>,
     start_offset: Vec<usize>,
 }
 
-impl<'a> LinePos<'a> {
-    pub fn new(content: &'a str) -> Self {
+impl LinePos {
+    pub fn new(content: &str) -> Self {
+        let mut content: Vec<_> = content.chars().collect();
+        if content.last() != Some(&'\n') {
+            content.push('\n');
+        }
         let mut start_offset = vec![0];
-        for (i, c) in content.chars().enumerate() {
-            if c == '\n' {
+        for (i, c) in content.iter().enumerate() {
+            if *c == '\n' {
                 start_offset.push(i + 1);
             }
         }
@@ -28,23 +32,22 @@ impl<'a> LinePos<'a> {
         let line = self
             .start_offset
             .binary_search(&offset)
-            .unwrap_or_else(|x| x)
-            + 1;
+            .unwrap_or_else(|x| x);
         let col = offset - self.start_offset[line - 1] + 1;
         (line, col)
     }
     /// Get the line content from the line number.
     /// The line number is 1-based.
-    pub fn get_line(&self, line: usize) -> Option<&str> {
+    pub fn get_line(&self, line: usize) -> Option<String> {
         let start = self.start_offset.get(line - 1)?;
         let end = self.start_offset.get(line)?;
-        Some(&self.content[*start..*end])
+        Some(self.content[*start..*end].iter().collect::<String>())
     }
     /// Display the error message with the line and column number.
-    pub fn display_error(&self, e: &OffsetError) {
+    pub fn display_error(&self, file: &str, e: &OffsetError) {
         let (line, col) = self.line_col(e.offset);
-        println!("Error at line {} column {}: {}", line, col, e.msg);
-        println!("    {}", self.get_line(line).unwrap_or(""));
+        println!("[{}:{}:{}] Error: {}", file, line, col, e.msg);
+        println!("    {}", self.get_line(line).unwrap());
         println!("    {}^", " ".repeat(col - 1));
     }
 }

@@ -32,7 +32,7 @@ impl PreGrammar {
         }
     }
     fn push_token(&mut self) {
-        if let Some(token) = self.lexer.consume_token_offset() {
+        if let Some(token) = self.lexer.consume_token() {
             self.tokens.push(token);
         }
     }
@@ -59,9 +59,11 @@ impl PreGrammar {
         self.push_token();
         while let Some(token) = self.lexer.peek_token() {
             match token {
+                Token::Begin => {
+                    break;
+                }
                 Token::Ident(_) => {
                     self.parse_one_var();
-
                     while self.lexer.peek_token() == Some(Token::Comma) {
                         self.push_token();
                         match self.lexer.peek_token() {
@@ -94,6 +96,7 @@ impl PreGrammar {
                     self.push_token();
                 }
                 _ => {
+                    self.lexer.consume_token();
                     self.lexer.push_error("Expected identifier");
                 }
             }
@@ -113,10 +116,10 @@ impl PreGrammar {
                     layer += 1;
                 }
                 Token::End => {
-                    layer -= 1;
-                    if layer < 0 {
+                    if layer == 0 {
                         self.lexer.push_error("Unexpected end");
                     }
+                    layer -= 1;
                 }
                 Token::Ident(s) => {
                     if !self.identifiers.contains(&s) {
@@ -124,9 +127,7 @@ impl PreGrammar {
                             .push_error(&format!("Undeclared identifier: {}", s));
                     }
                 }
-                _ => {
-                    self.push_token();
-                }
+                _ => {}
             }
             self.push_token();
         }

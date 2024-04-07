@@ -91,8 +91,8 @@ impl Token {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OffsetToken {
-    offset: usize,
-    token: Token,
+    pub offset: usize,
+    pub token: Token,
 }
 
 #[derive(Debug, Clone)]
@@ -114,10 +114,10 @@ impl Lexer {
         self.errors
     }
     fn peek_char(&self) -> Option<char> {
-        self.input.get(self.pos + 1).cloned()
+        self.input.get(self.pos).cloned()
     }
     fn consume_char(&mut self) -> Option<char> {
-        match self.input.get(self.pos).cloned() {
+        match self.peek_char() {
             Some(c) => {
                 self.pos += 1;
                 Some(c)
@@ -125,35 +125,40 @@ impl Lexer {
             None => None,
         }
     }
+    pub fn peek_token(&self) -> Option<Token> {
+        let mut lexer = self.clone();
+        lexer.consume_token().map(|t| t.token)
+    }
+    pub fn peek_pos(&self) -> usize {
+        let mut lexer = self.clone();
+        lexer.consume_token().map(|t| t.offset).unwrap_or(self.pos)
+    }
     pub fn push_error(&mut self, msg: &str) {
         self.errors.push(OffsetError {
-            offset: self.pos,
+            offset: self.peek_pos(),
             msg: msg.to_string(),
         });
     }
-    pub fn peek_token(&self) -> Option<Token> {
-        let mut lexer = self.clone();
-        lexer.consume_token()
-    }
-    pub fn consume_token_offset(&mut self) -> Option<OffsetToken> {
-        let offset = self.pos;
-        self.consume_token()
-            .map(|token| OffsetToken { offset, token })
-    }
-    pub fn consume_token(&mut self) -> Option<Token> {
+    pub fn consume_token(&mut self) -> Option<OffsetToken> {
         while let Some(c) = self.peek_char() {
             if c.is_whitespace() {
                 self.consume_char();
                 continue;
             }
+            let start = self.pos;
+            let result = |token| {
+                Some(OffsetToken {
+                    offset: start,
+                    token,
+                })
+            };
             if c.is_ascii_alphabetic() {
                 let mut ident = String::new();
                 while self
                     .peek_char()
                     .map_or(false, |c| c.is_ascii_alphanumeric())
                 {
-                    ident.push(c);
-                    self.consume_char();
+                    ident.push(self.consume_char().unwrap());
                 }
                 let token = match ident.to_lowercase().as_str() {
                     "var" => Token::Var,
@@ -172,88 +177,101 @@ impl Lexer {
                     "or" => Token::Or,
                     _ => Token::Ident(ident),
                 };
-                return Some(token);
+                return result(token);
             } else if c.is_numeric() {
                 let mut num = String::new();
                 while self.peek_char().map_or(false, |c| c.is_numeric()) {
-                    num.push(c);
-                    self.consume_char();
+                    num.push(self.consume_char().unwrap());
                 }
                 if self.peek_char().map_or(false, |c| c.is_ascii_alphabetic()) {
                     self.push_error("Unexpected character after number");
                 }
-                return Some(Token::Int(num.parse().unwrap()));
+                if num.starts_with('0') && num.len() > 1 {
+                    self.push_error("Invalid number");
+                }
+                match num.parse() {
+                    Ok(num) => return result(Token::Int(num)),
+                    Err(_) => self.push_error("Invalid number"),
+                };
             } else {
                 match c {
                     '+' => {
                         self.consume_char();
-                        return Some(Token::Add);
+                        return result(Token::Add);
                     }
                     '-' => {
                         self.consume_char();
-                        return Some(Token::Sub);
+                        return result(Token::Sub);
                     }
                     '*' => {
                         self.consume_char();
-                        return Some(Token::Mul);
+                        return result(Token::Mul);
                     }
                     '/' => {
-                        self.consume_char();
-                        return Some(Token::Div);
+                        if self.peek_char() == Some('/') {
+                            while self.peek_char() != Some('\n') {
+                                self.consume_char();
+                            }
+                            continue;
+                        } else {
+                            self.consume_char();
+                            return result(Token::Div);
+                        }
                     }
                     ':' => {
                         self.consume_char();
                         if self.peek_char() == Some('=') {
                             self.consume_char();
-                            return Some(Token::Assign);
+                            return result(Token::Assign);
                         }
-                        return Some(Token::Colon);
+                        return result(Token::Colon);
                     }
                     '<' => {
                         self.consume_char();
                         if self.peek_char() == Some('>') {
                             self.consume_char();
-                            return Some(Token::Ne);
+                            return result(Token::Ne);
                         } else if self.peek_char() == Some('=') {
                             self.consume_char();
-                            return Some(Token::Le);
+                            return result(Token::Le);
                         }
-                        return Some(Token::Lt);
+                        return result(Token::Lt);
                     }
                     '>' => {
                         self.consume_char();
                         if self.peek_char() == Some('=') {
                             self.consume_char();
-                            return Some(Token::Ge);
+                            return result(Token::Ge);
                         }
-                        return Some(Token::Gt);
+                        return result(Token::Gt);
                     }
                     '=' => {
                         self.consume_char();
                         if self.peek_char() == Some('=') {
                             self.consume_char();
-                            return Some(Token::Eq);
+                            return result(Token::Eq);
                         }
                         self.push_error("Unexpected character after =");
                     }
                     '(' => {
                         self.consume_char();
-                        return Some(Token::LParen);
+                        return result(Token::LParen);
                     }
                     ')' => {
                         self.consume_char();
-                        return Some(Token::RParen);
+                        return result(Token::RParen);
                     }
                     ',' => {
                         self.consume_char();
-                        return Some(Token::Comma);
+                        return result(Token::Comma);
                     }
                     ';' => {
                         self.consume_char();
-                        return Some(Token::SemiColon);
+                        return result(Token::SemiColon);
                     }
                     c => {
                         self.push_error(&format!("Unexpected character `{}`", c));
+                        self.consume_char();
                     }
                 }
             }
