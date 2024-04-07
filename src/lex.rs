@@ -61,7 +61,7 @@ pub enum Token {
     Ge,
     /// <=
     Le,
-    /// ==
+    /// =
     Eq,
     /// :
     Colon,
@@ -254,11 +254,7 @@ impl Lexer {
                     }
                     '=' => {
                         self.consume_char();
-                        if self.peek_char() == Some('=') {
-                            self.consume_char();
-                            return result(Token::Eq);
-                        }
-                        self.push_error("Unexpected character after =");
+                        return result(Token::Eq);
                     }
                     '(' => {
                         self.consume_char();
