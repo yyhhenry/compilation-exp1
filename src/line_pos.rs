@@ -32,6 +32,7 @@ impl LinePos {
         let line = self
             .start_offset
             .binary_search(&offset)
+            .map(|x| x + 1)
             .unwrap_or_else(|x| x);
         let col = offset - self.start_offset[line - 1] + 1;
         (line, col)
@@ -47,7 +48,10 @@ impl LinePos {
     pub fn display_error(&self, file: &str, e: &OffsetError) {
         let (line, col) = self.line_col(e.offset);
         println!("[{}:{}:{}] Error: {}", file, line, col, e.msg);
-        println!("    {}", self.get_line(line).unwrap());
+        println!(
+            "    {}",
+            self.get_line(line).unwrap_or("".to_string()).trim_end()
+        );
         println!("    {}^", " ".repeat(col - 1));
     }
 }

@@ -1,12 +1,19 @@
 var
     i: integer;
-    i: integer; // duplicate identifier
-    a#: integer; // invalid character
-    9b: integer; // identifier starts with a digit
-    integer: real; // expected identifier
+
+    // duplicate identifier
+    i: integer; 
+    
+    // invalid character
+    a#: integer; 
+    
+    // identifier starts with a digit
+    9b: integer; 
 
 begin 
-    i := 01; // invalid integer literal
+    // invalid integer literal
+    i := 01; 
     i := 2;
-    c := 3; // undeclared identifier
+    // undeclared identifier
+    c := 3;
 end 

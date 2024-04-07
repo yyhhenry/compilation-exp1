@@ -1,7 +1,6 @@
 var
-    i, j1, sum, flag: integer;
-    
-    // valid comment
+    i, j1, sum: integer; flag: bool;
+
 begin
     i := 0; // 0 is valid
     j1 := 50;
@@ -14,5 +13,4 @@ begin
         if (sum > 65535 / (i + 1)) then
             flag := 0;
     end;
-    // any comment
 end

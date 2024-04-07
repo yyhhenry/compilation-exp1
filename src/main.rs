@@ -19,11 +19,11 @@ struct Args {
 }
 fn write_to_output(output_file: &str, tokens: pre_grammar::TokensOutput) -> Result<()> {
     let output_file = Path::new(output_file);
-    let output = std::fs::File::create(output_file)?;
     let dir = output_file
         .parent()
         .ok_or_else(|| anyhow!("Invalid output file"))?;
     std::fs::create_dir_all(dir)?;
+    let output = std::fs::File::create(output_file)?;
     let output = std::io::BufWriter::new(output);
 
     serde_json::to_writer_pretty(output, &tokens)?;

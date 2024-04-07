@@ -133,11 +133,17 @@ impl Lexer {
         let mut lexer = self.clone();
         lexer.consume_token().map(|t| t.offset).unwrap_or(self.pos)
     }
-    pub fn push_error(&mut self, msg: &str) {
+    fn push_error_pos(&mut self, offset: usize, msg: &str) {
         self.errors.push(OffsetError {
-            offset: self.peek_pos(),
+            offset,
             msg: msg.to_string(),
         });
+    }
+    fn push_error(&mut self, msg: &str) {
+        self.push_error_pos(self.pos, msg);
+    }
+    pub fn push_error_peek(&mut self, msg: &str) {
+        self.push_error_pos(self.peek_pos(), msg);
     }
     pub fn consume_token(&mut self) -> Option<OffsetToken> {
         while let Some(c) = self.peek_char() {
@@ -187,7 +193,7 @@ impl Lexer {
                     self.push_error("Unexpected character after number");
                 }
                 if num.starts_with('0') && num.len() > 1 {
-                    self.push_error("Invalid number");
+                    self.push_error_pos(start, "Invalid number");
                 }
                 match num.parse() {
                     Ok(num) => return result(Token::Int(num)),

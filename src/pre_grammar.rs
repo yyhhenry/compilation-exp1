@@ -36,25 +36,30 @@ impl PreGrammar {
             self.tokens.push(token);
         }
     }
-    pub fn parse_one_var(&mut self) {
+    fn push_error(&mut self, msg: &str) {
+        self.lexer.push_error_peek(msg);
+    }
+    fn parse_one_var(&mut self) {
         match self.lexer.peek_token() {
             Some(Token::Ident(s)) => {
                 self.push_token();
                 if !self.identifiers.insert(s.clone()) {
-                    self.lexer
-                        .push_error(&format!("Duplicate identifier: {}", s));
+                    self.push_error(&format!("Duplicate identifier: {}", s));
                 }
             }
             _ => {
-                self.lexer.push_error("Expected identifier");
+                self.push_error("Expected identifier");
             }
         }
     }
     /// Peek the var block.
     /// Check for unexpected type, missing comma, duplicate identifier.
-    pub fn parse_var(&mut self) {
+    fn parse_var(&mut self) {
         if self.lexer.peek_token() != Some(Token::Var) {
-            self.lexer.push_error("Expected var");
+            if self.lexer.peek_token() == Some(Token::Begin) {
+                return;
+            }
+            self.push_error("Expected var");
         }
         self.push_token();
         while let Some(token) = self.lexer.peek_token() {
@@ -71,13 +76,13 @@ impl PreGrammar {
                                 self.parse_one_var();
                             }
                             _ => {
-                                self.lexer.push_error("Expected identifier");
+                                self.push_error("Expected identifier");
                             }
                         }
                     }
 
                     if self.lexer.peek_token() != Some(Token::Colon) {
-                        self.lexer.push_error("Expected colon");
+                        self.push_error("Expected colon");
                     }
                     self.push_token();
 
@@ -86,18 +91,18 @@ impl PreGrammar {
                             self.push_token();
                         }
                         _ => {
-                            self.lexer.push_error("Expected type");
+                            self.push_error("Expected type");
                         }
                     }
 
                     if self.lexer.peek_token() != Some(Token::SemiColon) {
-                        self.lexer.push_error("Expected semicolon");
+                        self.push_error("Expected semicolon");
                     }
                     self.push_token();
                 }
                 _ => {
                     self.lexer.consume_token();
-                    self.lexer.push_error("Expected identifier");
+                    self.push_error("Expected identifier");
                 }
             }
         }
@@ -105,26 +110,33 @@ impl PreGrammar {
     /// Parse the program.
     /// Check if `begin` and `end` are present.
     /// Check if the identifiers have been declared.
-    pub fn parse_program(&mut self) {
+    fn parse_program(&mut self) {
         if self.lexer.peek_token() != Some(Token::Begin) {
-            self.lexer.push_error("Expected begin");
+            self.push_error("Expected begin");
         }
         let mut layer = 0;
+        let mut should_finish = false;
         while let Some(token) = self.lexer.peek_token() {
+            if should_finish {
+                self.push_error("Unexpected token after end");
+                break;
+            }
             match token {
                 Token::Begin => {
                     layer += 1;
                 }
                 Token::End => {
                     if layer == 0 {
-                        self.lexer.push_error("Unexpected end");
+                        self.push_error("Unexpected end");
+                    }
+                    if layer == 1 {
+                        should_finish = true;
                     }
                     layer -= 1;
                 }
                 Token::Ident(s) => {
                     if !self.identifiers.contains(&s) {
-                        self.lexer
-                            .push_error(&format!("Undeclared identifier: {}", s));
+                        self.push_error(&format!("Undeclared identifier: {}", s));
                     }
                 }
                 _ => {}
@@ -132,7 +144,7 @@ impl PreGrammar {
             self.push_token();
         }
         if layer > 0 {
-            self.lexer.push_error("Missing end");
+            self.push_error("Missing end");
         }
     }
     /// Parse the input.

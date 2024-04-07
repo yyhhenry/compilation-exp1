@@ -1,0 +1,10 @@
+// no var block is ok
+
+begin
+
+    // Undefined variable
+    a := 10; 
+
+end 
+    // Unexpected token after end
+    d := 20; 
