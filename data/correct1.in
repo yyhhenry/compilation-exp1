@@ -1,5 +1,6 @@
 Var // ignore case
-    i, j1, sum: integer; Flag: bool;
+    i, j1: integer; SUM: longint;
+    Flag: bool;
 
 begin
     i := 0; // 0 is valid
