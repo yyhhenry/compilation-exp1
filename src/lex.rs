@@ -27,7 +27,7 @@ pub enum Token {
     Bool,
     Real,
 
-    // operators
+    // operators +|-|*|/|:=|<|>|<>|>=|<=|=|:|(|)
     /// +
     Add,
     /// -
@@ -64,7 +64,9 @@ pub enum Token {
     SemiColon,
 
     // Literals and Identifiers
+    /// Identifier [a-zA-Z][a-zA-Z0-9]*, case insensitive
     Ident(String),
+    /// Integer literal [1-9][0-9]*|0, no leading 0
     Int(String),
 }
 impl Token {
