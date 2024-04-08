@@ -4,21 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::line_pos::OffsetError;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-/// Token in PL/0 language.
+/// Token in PL/0 Like language.
 /// Ignore case.
-/// ```txt
-/// var|integer|longint|bool|real|if|then|else|while|do
-/// |begin|end|and|or|+|-|*|/|:=|<|>|<>|>=|<=|==
-/// |:|(|)|,|[1-9][0-9]*|[a-zA-Z][a-zA-Z0-9]*
-/// ```
-/// ```txt
-/// <var> ::= <id> {, <id>}: <type>
-/// <vars> ::= var <var> {; <var>}
-/// <stmt> ::= while <expr> do <stmt>
-///        | begin <stmt> {; <stmt>} end
-///        | if <expr> then <stmt>
-///        | if <expr> then <stmt> else <stmt>
-/// ```
 pub enum Token {
     // struct keywords
     Var,
