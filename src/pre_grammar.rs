@@ -56,10 +56,10 @@ impl PreGrammar {
     /// Check for unexpected type, missing comma, duplicate identifier.
     fn parse_var(&mut self) {
         if self.lexer.peek_token() != Some(Token::Var) {
-            if self.lexer.peek_token() == Some(Token::Begin) {
-                return;
+            if self.lexer.peek_token() != Some(Token::Begin) {
+                self.push_error("Expected var");
             }
-            self.push_error("Expected var");
+            return;
         }
         self.push_token();
         while let Some(token) = self.lexer.peek_token() {
