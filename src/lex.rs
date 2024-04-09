@@ -187,6 +187,10 @@ impl Lexer {
                 }
                 if num.starts_with('0') && num.len() > 1 {
                     self.push_error_pos(start, "Number cannot start with 0");
+                    num = num.trim_start_matches('0').to_string();
+                    if num.is_empty() {
+                        num.push('0');
+                    }
                 }
                 return result(Token::Int(num));
             } else {
