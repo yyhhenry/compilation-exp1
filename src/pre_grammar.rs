@@ -52,9 +52,9 @@ impl PreGrammar {
             }
         }
     }
-    /// Peek the var block.
+    /// Parse the var block.
     /// Check for unexpected type, missing comma, duplicate identifier.
-    fn parse_var(&mut self) {
+    fn parse_var_block(&mut self) {
         if self.lexer.peek_token() != Some(Token::Var) {
             if self.lexer.peek_token() != Some(Token::Begin) {
                 self.push_error("Expected var");
@@ -111,10 +111,10 @@ impl PreGrammar {
             }
         }
     }
-    /// Parse the program.
+    /// Parse the program block.
     /// Check if `begin` and `end` are present.
     /// Check if the identifiers have been declared.
-    fn parse_program(&mut self) {
+    fn parse_program_block(&mut self) {
         if self.lexer.peek_token() != Some(Token::Begin) {
             self.push_error("Expected begin");
         }
@@ -154,8 +154,8 @@ impl PreGrammar {
     }
     /// Parse the input.
     pub fn parse(&mut self) {
-        self.parse_var();
-        self.parse_program();
+        self.parse_var_block();
+        self.parse_program_block();
     }
     pub fn output(self) -> Result<TokensOutput, Vec<OffsetError>> {
         let errors = self.lexer.errors();
