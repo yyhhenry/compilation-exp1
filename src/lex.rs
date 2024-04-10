@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::ErrorRecorder;
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 /// Token in PL/0 Like language.
 /// Ignore case.
-pub enum Token {
+pub enum TokenEnum {
     // struct keywords
     Var,
     If,
@@ -63,23 +63,16 @@ pub enum Token {
 
     // Literals and Identifiers
     /// Identifier [a-zA-Z][a-zA-Z0-9]*, case insensitive
-    Ident(String),
+    Identifier,
     /// Integer literal [1-9][0-9]*|0, no leading 0
-    Int(String),
-}
-impl Token {
-    pub fn is_type(&self) -> bool {
-        match self {
-            Token::Integer | Token::Longint | Token::Bool | Token::Real => true,
-            _ => false,
-        }
-    }
+    IntLiteral,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OffsetToken {
+pub struct Token {
     pub offset: usize,
-    pub token: Token,
+    pub content: String,
+    pub token: TokenEnum,
 }
 
 #[derive(Debug, Clone)]
@@ -106,44 +99,36 @@ impl CharStream {
             None => None,
         }
     }
-    pub fn next_token(
-        &mut self,
-        chars: &mut CharStream,
-        errors: &mut ErrorRecorder,
-    ) -> Option<OffsetToken> {
+    /// Returns (start, token)
+    fn next_token_base(&mut self, errors: &mut ErrorRecorder) -> Option<(usize, TokenEnum)> {
         while let Some(c) = self.peek() {
             if c.is_whitespace() {
                 self.next();
                 continue;
             }
             let start = self.pos;
-            let result = |token| {
-                Some(OffsetToken {
-                    offset: start,
-                    token,
-                })
-            };
+            let result = |token| Some((start, token));
             if c.is_ascii_alphabetic() {
                 let mut ident = String::new();
                 while self.peek().map_or(false, |c| c.is_ascii_alphanumeric()) {
                     ident.push(self.next().unwrap());
                 }
                 let token = match ident.to_lowercase().as_str() {
-                    "var" => Token::Var,
-                    "integer" => Token::Integer,
-                    "longint" => Token::Longint,
-                    "bool" => Token::Bool,
-                    "real" => Token::Real,
-                    "if" => Token::If,
-                    "then" => Token::Then,
-                    "else" => Token::Else,
-                    "while" => Token::While,
-                    "do" => Token::Do,
-                    "begin" => Token::Begin,
-                    "end" => Token::End,
-                    "and" => Token::And,
-                    "or" => Token::Or,
-                    ident => Token::Ident(ident.to_string()),
+                    "var" => TokenEnum::Var,
+                    "integer" => TokenEnum::Integer,
+                    "longint" => TokenEnum::Longint,
+                    "bool" => TokenEnum::Bool,
+                    "real" => TokenEnum::Real,
+                    "if" => TokenEnum::If,
+                    "then" => TokenEnum::Then,
+                    "else" => TokenEnum::Else,
+                    "while" => TokenEnum::While,
+                    "do" => TokenEnum::Do,
+                    "begin" => TokenEnum::Begin,
+                    "end" => TokenEnum::End,
+                    "and" => TokenEnum::And,
+                    "or" => TokenEnum::Or,
+                    _ => TokenEnum::Identifier,
                 };
                 return result(token);
             } else if c.is_numeric() {
@@ -163,64 +148,64 @@ impl CharStream {
                         num.push('0');
                     }
                 }
-                return result(Token::Int(num));
+                return result(TokenEnum::IntLiteral);
             } else {
                 self.next();
                 match c {
                     '+' => {
-                        return result(Token::Add);
+                        return result(TokenEnum::Add);
                     }
                     '-' => {
-                        return result(Token::Sub);
+                        return result(TokenEnum::Sub);
                     }
                     '*' => {
-                        return result(Token::Mul);
+                        return result(TokenEnum::Mul);
                     }
                     '/' => {
                         if self.peek() == Some('/') {
                             while self.next() != Some('\n') {}
                             continue;
                         }
-                        return result(Token::Div);
+                        return result(TokenEnum::Div);
                     }
                     ':' => {
                         if self.peek() == Some('=') {
                             self.next();
-                            return result(Token::Assign);
+                            return result(TokenEnum::Assign);
                         }
-                        return result(Token::Colon);
+                        return result(TokenEnum::Colon);
                     }
                     '<' => {
                         if self.peek() == Some('>') {
                             self.next();
-                            return result(Token::Ne);
+                            return result(TokenEnum::Ne);
                         } else if self.peek() == Some('=') {
                             self.next();
-                            return result(Token::Le);
+                            return result(TokenEnum::Le);
                         }
-                        return result(Token::Lt);
+                        return result(TokenEnum::Lt);
                     }
                     '>' => {
                         if self.peek() == Some('=') {
                             self.next();
-                            return result(Token::Ge);
+                            return result(TokenEnum::Ge);
                         }
-                        return result(Token::Gt);
+                        return result(TokenEnum::Gt);
                     }
                     '=' => {
-                        return result(Token::Eq);
+                        return result(TokenEnum::Eq);
                     }
                     '(' => {
-                        return result(Token::LParen);
+                        return result(TokenEnum::LParen);
                     }
                     ')' => {
-                        return result(Token::RParen);
+                        return result(TokenEnum::RParen);
                     }
                     ',' => {
-                        return result(Token::Comma);
+                        return result(TokenEnum::Comma);
                     }
                     ';' => {
-                        return result(Token::SemiColon);
+                        return result(TokenEnum::SemiColon);
                     }
                     c => {
                         errors.error(start, &format!("Unexpected character `{}`", c));
@@ -231,11 +216,21 @@ impl CharStream {
         }
         None
     }
+
+    pub fn next_token(&mut self, errors: &mut ErrorRecorder) -> Option<Token> {
+        let (offset, token) = self.next_token_base(errors)?;
+        let content = self.input[offset..self.pos].iter().collect();
+        Some(Token {
+            offset,
+            content,
+            token,
+        })
+    }
 }
-pub fn lex(input: &str, errors: &mut ErrorRecorder) -> Vec<OffsetToken> {
+pub fn lex(input: &str, errors: &mut ErrorRecorder) -> Vec<Token> {
     let mut stream = CharStream::new(input);
     let mut tokens = Vec::new();
-    while let Some(token) = stream.next_token(&mut stream, errors) {
+    while let Some(token) = stream.next_token(errors) {
         tokens.push(token);
     }
     tokens

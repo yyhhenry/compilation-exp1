@@ -1,12 +1,12 @@
+mod error;
 mod lex;
-mod line_pos;
 mod pre_grammar;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use lex::Token;
+use serde::Serialize;
 use std::path::Path;
-
-use crate::{line_pos::LinePos, pre_grammar::PreGrammar};
 
 #[derive(Parser)]
 struct Args {
@@ -17,7 +17,12 @@ struct Args {
     #[clap(short, long)]
     output_file: Option<String>,
 }
-fn write_to_output(output_file: &str, tokens: pre_grammar::TokensOutput) -> Result<()> {
+fn write_to_output(output_file: &str, tokens: Vec<Token>) -> Result<()> {
+    #[derive(Serialize)]
+    struct TokenOutput {
+        tokens: Vec<Token>,
+    }
+    let tokens = TokenOutput { tokens };
     let output_file = Path::new(output_file);
     let dir = output_file
         .parent()
@@ -38,24 +43,15 @@ fn main() -> Result<()> {
         return Ok(());
     }
     let content = std::fs::read_to_string(input_file)?;
-    let line_pos = LinePos::new(&content);
-    let mut pre_grammar = PreGrammar::new(&content);
-    pre_grammar.parse();
-    match pre_grammar.output() {
-        Ok(tokens) => {
-            let output_file = args.output_file;
-            if let Some(output_file) = output_file {
-                write_to_output(&output_file, tokens)
-            } else {
-                println!("No syntax errors");
-                Ok(())
-            }
+    let mut errors = error::ErrorRecorder::new();
+    let tokens = pre_grammar::parse(&content, &mut errors);
+    errors.print_with(&input_file.display().to_string(), &content);
+    if errors.no_error() {
+        if let Some(output_file) = args.output_file {
+            write_to_output(&output_file, tokens)?;
         }
-        Err(errors) => {
-            for e in errors {
-                line_pos.display_error(&args.input_file, &e);
-            }
-            Err(anyhow!("Syntax errors"))
-        }
+        Ok(())
+    } else {
+        Err(anyhow!("Error detected"))
     }
 }
