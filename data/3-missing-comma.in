@@ -1,0 +1,7 @@
+var
+    i j: integer;
+    k: real;
+begin
+    i := 0;
+    j := 0;
+end

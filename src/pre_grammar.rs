@@ -131,7 +131,7 @@ impl TokenStream {
                 return errors.hard(self.peek_pos(), "Expected var");
             }
         }
-        while let Some(&TokenEnum::Identifier) = self.peek() {
+        while self.peek().map_or(false, |t| t != &TokenEnum::Begin) {
             self.def_line(&mut identifiers, errors)?;
         }
         Ok(identifiers)
@@ -146,24 +146,8 @@ impl TokenStream {
         if self.peek() != Some(&TokenEnum::Begin) {
             return errors.hard(self.peek_pos(), "Expected begin");
         }
-        let mut layer = 0;
-        let mut should_finish = false;
         while let Some(token) = self.peek() {
-            if should_finish {
-                return errors.hard(self.peek_pos(), "Unexpected token after end");
-            }
             match token {
-                TokenEnum::Begin => {
-                    self.next();
-                    layer += 1;
-                }
-                TokenEnum::End => {
-                    self.next();
-                    if layer == 1 {
-                        should_finish = true;
-                    }
-                    layer -= 1;
-                }
                 TokenEnum::Identifier => {
                     let token = self.next().unwrap();
                     let s = token.content.to_lowercase();
@@ -175,9 +159,6 @@ impl TokenStream {
                     self.next();
                 }
             }
-        }
-        if layer > 0 {
-            return errors.hard(self.peek_pos(), "Missing end");
         }
         Ok(())
     }

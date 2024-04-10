@@ -49,6 +49,8 @@ fn main() -> Result<()> {
     if errors.no_error() {
         if let Some(output_file) = args.output_file {
             write_to_output(&output_file, tokens)?;
+        } else {
+            println!("No error detected");
         }
         Ok(())
     } else {
