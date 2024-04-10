@@ -172,8 +172,8 @@ pub fn parse(content: &str, errors: &mut ErrorRecorder) -> Vec<Token> {
     let mut stream = TokenStream::new(tokens.clone());
     match stream.code(errors) {
         Ok(()) => {}
-        Err(_) => {
-            eprintln!("Hard error detected, aborting");
+        Err(e) => {
+            eprintln!("Hard error detected, aborting: {:?}", e);
         }
     }
     tokens
