@@ -1,0 +1,6 @@
+var 
+    // identifier starts with a digit
+    9b: integer; 
+
+begin
+end

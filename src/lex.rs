@@ -1,12 +1,10 @@
-use std::rc::Rc;
-
 use serde::{Deserialize, Serialize};
 
-use crate::line_pos::OffsetError;
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+use crate::error::ErrorRecorder;
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 /// Token in PL/0 Like language.
 /// Ignore case.
-pub enum Token {
+pub enum TokenEnum {
     // struct keywords
     Var,
     If,
@@ -65,48 +63,35 @@ pub enum Token {
 
     // Literals and Identifiers
     /// Identifier [a-zA-Z][a-zA-Z0-9]*, case insensitive
-    Ident(String),
+    Identifier,
     /// Integer literal [1-9][0-9]*|0, no leading 0
-    Int(String),
-}
-impl Token {
-    pub fn is_type(&self) -> bool {
-        match self {
-            Token::Integer | Token::Longint | Token::Bool | Token::Real => true,
-            _ => false,
-        }
-    }
+    IntLiteral,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OffsetToken {
+pub struct Token {
     pub offset: usize,
-    pub token: Token,
+    pub content: String,
+    pub token: TokenEnum,
 }
 
 #[derive(Debug, Clone)]
-pub struct Lexer {
-    input: Rc<Vec<char>>,
+pub struct CharStream {
+    input: Vec<char>,
     pos: usize,
-    errors: Vec<OffsetError>,
 }
-
-impl Lexer {
+impl CharStream {
     pub fn new(input: &str) -> Self {
         Self {
-            input: Rc::new(input.chars().collect()),
+            input: input.chars().collect(),
             pos: 0,
-            errors: Vec::new(),
         }
     }
-    pub fn errors(self) -> Vec<OffsetError> {
-        self.errors
-    }
-    fn peek_char(&self) -> Option<char> {
+    pub fn peek(&self) -> Option<char> {
         self.input.get(self.pos).cloned()
     }
-    fn consume_char(&mut self) -> Option<char> {
-        match self.peek_char() {
+    pub fn next(&mut self) -> Option<char> {
+        match self.peek() {
             Some(c) => {
                 self.pos += 1;
                 Some(c)
@@ -114,164 +99,139 @@ impl Lexer {
             None => None,
         }
     }
-    pub fn peek_token(&self) -> Option<Token> {
-        let mut lexer = Self {
-            input: self.input.clone(),
-            pos: self.pos,
-            errors: Vec::new(),
-        };
-        lexer.consume_token().map(|t| t.token)
-    }
-    pub fn peek_pos(&self) -> usize {
-        let mut lexer = self.clone();
-        lexer.consume_token().map(|t| t.offset).unwrap_or(self.pos)
-    }
-    fn push_error_pos(&mut self, offset: usize, msg: &str) {
-        self.errors.push(OffsetError {
-            offset,
-            msg: msg.to_string(),
-        });
-    }
-    fn push_error(&mut self, msg: &str) {
-        self.push_error_pos(self.pos, msg);
-    }
-    pub fn push_error_peek(&mut self, msg: &str) {
-        self.push_error_pos(self.peek_pos(), msg);
-    }
-    pub fn consume_token(&mut self) -> Option<OffsetToken> {
-        while let Some(c) = self.peek_char() {
+    /// Returns (start, token)
+    fn next_token_base(&mut self, errors: &mut ErrorRecorder) -> Option<(usize, TokenEnum)> {
+        while let Some(c) = self.peek() {
             if c.is_whitespace() {
-                self.consume_char();
+                self.next();
                 continue;
             }
             let start = self.pos;
-            let result = |token| {
-                Some(OffsetToken {
-                    offset: start,
-                    token,
-                })
-            };
+            let result = |token| Some((start, token));
             if c.is_ascii_alphabetic() {
                 let mut ident = String::new();
-                while self
-                    .peek_char()
-                    .map_or(false, |c| c.is_ascii_alphanumeric())
-                {
-                    ident.push(self.consume_char().unwrap());
+                while self.peek().map_or(false, |c| c.is_ascii_alphanumeric()) {
+                    ident.push(self.next().unwrap());
                 }
                 let token = match ident.to_lowercase().as_str() {
-                    "var" => Token::Var,
-                    "integer" => Token::Integer,
-                    "longint" => Token::Longint,
-                    "bool" => Token::Bool,
-                    "real" => Token::Real,
-                    "if" => Token::If,
-                    "then" => Token::Then,
-                    "else" => Token::Else,
-                    "while" => Token::While,
-                    "do" => Token::Do,
-                    "begin" => Token::Begin,
-                    "end" => Token::End,
-                    "and" => Token::And,
-                    "or" => Token::Or,
-                    ident => Token::Ident(ident.to_string()),
+                    "var" => TokenEnum::Var,
+                    "integer" => TokenEnum::Integer,
+                    "longint" => TokenEnum::Longint,
+                    "bool" => TokenEnum::Bool,
+                    "real" => TokenEnum::Real,
+                    "if" => TokenEnum::If,
+                    "then" => TokenEnum::Then,
+                    "else" => TokenEnum::Else,
+                    "while" => TokenEnum::While,
+                    "do" => TokenEnum::Do,
+                    "begin" => TokenEnum::Begin,
+                    "end" => TokenEnum::End,
+                    "and" => TokenEnum::And,
+                    "or" => TokenEnum::Or,
+                    _ => TokenEnum::Identifier,
                 };
                 return result(token);
             } else if c.is_numeric() {
                 let mut num = String::new();
-                while self.peek_char().map_or(false, |c| c.is_numeric()) {
-                    num.push(self.consume_char().unwrap());
+                while self.peek().map_or(false, |c| c.is_numeric()) {
+                    num.push(self.next().unwrap());
                 }
-                if self.peek_char().map_or(false, |c| c.is_ascii_alphabetic()) {
-                    self.push_error("Unexpected character after number");
+                if self.peek().map_or(false, |c| c.is_ascii_alphabetic()) {
+                    errors.error(self.pos, "Unexpected character after number");
+                    // Automatically add a space after the number
                 }
                 if num.starts_with('0') && num.len() > 1 {
-                    self.push_error_pos(start, "Number cannot start with 0");
+                    errors.warning(start, "Number cannot start with 0");
+                    // Remove leading zeros
                     num = num.trim_start_matches('0').to_string();
                     if num.is_empty() {
                         num.push('0');
                     }
                 }
-                return result(Token::Int(num));
+                return result(TokenEnum::IntLiteral);
             } else {
+                self.next();
                 match c {
                     '+' => {
-                        self.consume_char();
-                        return result(Token::Add);
+                        return result(TokenEnum::Add);
                     }
                     '-' => {
-                        self.consume_char();
-                        return result(Token::Sub);
+                        return result(TokenEnum::Sub);
                     }
                     '*' => {
-                        self.consume_char();
-                        return result(Token::Mul);
+                        return result(TokenEnum::Mul);
                     }
                     '/' => {
-                        if self.peek_char() == Some('/') {
-                            while self.peek_char() != Some('\n') {
-                                self.consume_char();
-                            }
+                        if self.peek() == Some('/') {
+                            while self.next() != Some('\n') {}
                             continue;
-                        } else {
-                            self.consume_char();
-                            return result(Token::Div);
                         }
+                        return result(TokenEnum::Div);
                     }
                     ':' => {
-                        self.consume_char();
-                        if self.peek_char() == Some('=') {
-                            self.consume_char();
-                            return result(Token::Assign);
+                        if self.peek() == Some('=') {
+                            self.next();
+                            return result(TokenEnum::Assign);
                         }
-                        return result(Token::Colon);
+                        return result(TokenEnum::Colon);
                     }
                     '<' => {
-                        self.consume_char();
-                        if self.peek_char() == Some('>') {
-                            self.consume_char();
-                            return result(Token::Ne);
-                        } else if self.peek_char() == Some('=') {
-                            self.consume_char();
-                            return result(Token::Le);
+                        if self.peek() == Some('>') {
+                            self.next();
+                            return result(TokenEnum::Ne);
+                        } else if self.peek() == Some('=') {
+                            self.next();
+                            return result(TokenEnum::Le);
                         }
-                        return result(Token::Lt);
+                        return result(TokenEnum::Lt);
                     }
                     '>' => {
-                        self.consume_char();
-                        if self.peek_char() == Some('=') {
-                            self.consume_char();
-                            return result(Token::Ge);
+                        if self.peek() == Some('=') {
+                            self.next();
+                            return result(TokenEnum::Ge);
                         }
-                        return result(Token::Gt);
+                        return result(TokenEnum::Gt);
                     }
                     '=' => {
-                        self.consume_char();
-                        return result(Token::Eq);
+                        return result(TokenEnum::Eq);
                     }
                     '(' => {
-                        self.consume_char();
-                        return result(Token::LParen);
+                        return result(TokenEnum::LParen);
                     }
                     ')' => {
-                        self.consume_char();
-                        return result(Token::RParen);
+                        return result(TokenEnum::RParen);
                     }
                     ',' => {
-                        self.consume_char();
-                        return result(Token::Comma);
+                        return result(TokenEnum::Comma);
                     }
                     ';' => {
-                        self.consume_char();
-                        return result(Token::SemiColon);
+                        return result(TokenEnum::SemiColon);
                     }
                     c => {
-                        self.push_error(&format!("Unexpected character `{}`", c));
-                        self.consume_char();
+                        errors.error(start, &format!("Unexpected character `{}`", c));
+                        // Skip the character
                     }
                 }
             }
         }
         None
     }
+
+    pub fn next_token(&mut self, errors: &mut ErrorRecorder) -> Option<Token> {
+        let (offset, token) = self.next_token_base(errors)?;
+        let content = self.input[offset..self.pos].iter().collect();
+        Some(Token {
+            offset,
+            content,
+            token,
+        })
+    }
+}
+pub fn lex(input: &str, errors: &mut ErrorRecorder) -> Vec<Token> {
+    let mut stream = CharStream::new(input);
+    let mut tokens = Vec::new();
+    while let Some(token) = stream.next_token(errors) {
+        tokens.push(token);
+    }
+    tokens
 }

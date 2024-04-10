@@ -1,0 +1,5 @@
+Var
+    i, j: integer;
+begin
+    k := 1;
+end
