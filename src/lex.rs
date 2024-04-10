@@ -1,8 +1,6 @@
-use std::rc::Rc;
-
 use serde::{Deserialize, Serialize};
 
-use crate::line_pos::OffsetError;
+use crate::error::ErrorRecorder;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// Token in PL/0 Like language.
 /// Ignore case.
@@ -85,28 +83,22 @@ pub struct OffsetToken {
 }
 
 #[derive(Debug, Clone)]
-pub struct Lexer {
-    input: Rc<Vec<char>>,
+pub struct CharStream {
+    input: Vec<char>,
     pos: usize,
-    errors: Vec<OffsetError>,
 }
-
-impl Lexer {
+impl CharStream {
     pub fn new(input: &str) -> Self {
         Self {
-            input: Rc::new(input.chars().collect()),
+            input: input.chars().collect(),
             pos: 0,
-            errors: Vec::new(),
         }
     }
-    pub fn errors(self) -> Vec<OffsetError> {
-        self.errors
-    }
-    fn peek_char(&self) -> Option<char> {
+    pub fn peek(&self) -> Option<char> {
         self.input.get(self.pos).cloned()
     }
-    fn consume_char(&mut self) -> Option<char> {
-        match self.peek_char() {
+    pub fn next(&mut self) -> Option<char> {
+        match self.peek() {
             Some(c) => {
                 self.pos += 1;
                 Some(c)
@@ -114,34 +106,14 @@ impl Lexer {
             None => None,
         }
     }
-    pub fn peek_token(&self) -> Option<Token> {
-        let mut lexer = Self {
-            input: self.input.clone(),
-            pos: self.pos,
-            errors: Vec::new(),
-        };
-        lexer.consume_token().map(|t| t.token)
-    }
-    pub fn peek_pos(&self) -> usize {
-        let mut lexer = self.clone();
-        lexer.consume_token().map(|t| t.offset).unwrap_or(self.pos)
-    }
-    fn push_error_pos(&mut self, offset: usize, msg: &str) {
-        self.errors.push(OffsetError {
-            offset,
-            msg: msg.to_string(),
-        });
-    }
-    fn push_error(&mut self, msg: &str) {
-        self.push_error_pos(self.pos, msg);
-    }
-    pub fn push_error_peek(&mut self, msg: &str) {
-        self.push_error_pos(self.peek_pos(), msg);
-    }
-    pub fn consume_token(&mut self) -> Option<OffsetToken> {
-        while let Some(c) = self.peek_char() {
+    pub fn next_token(
+        &mut self,
+        chars: &mut CharStream,
+        errors: &mut ErrorRecorder,
+    ) -> Option<OffsetToken> {
+        while let Some(c) = self.peek() {
             if c.is_whitespace() {
-                self.consume_char();
+                self.next();
                 continue;
             }
             let start = self.pos;
@@ -153,11 +125,8 @@ impl Lexer {
             };
             if c.is_ascii_alphabetic() {
                 let mut ident = String::new();
-                while self
-                    .peek_char()
-                    .map_or(false, |c| c.is_ascii_alphanumeric())
-                {
-                    ident.push(self.consume_char().unwrap());
+                while self.peek().map_or(false, |c| c.is_ascii_alphanumeric()) {
+                    ident.push(self.next().unwrap());
                 }
                 let token = match ident.to_lowercase().as_str() {
                     "var" => Token::Var,
@@ -179,14 +148,16 @@ impl Lexer {
                 return result(token);
             } else if c.is_numeric() {
                 let mut num = String::new();
-                while self.peek_char().map_or(false, |c| c.is_numeric()) {
-                    num.push(self.consume_char().unwrap());
+                while self.peek().map_or(false, |c| c.is_numeric()) {
+                    num.push(self.next().unwrap());
                 }
-                if self.peek_char().map_or(false, |c| c.is_ascii_alphabetic()) {
-                    self.push_error("Unexpected character after number");
+                if self.peek().map_or(false, |c| c.is_ascii_alphabetic()) {
+                    errors.error(self.pos, "Unexpected character after number");
+                    // Automatically add a space after the number
                 }
                 if num.starts_with('0') && num.len() > 1 {
-                    self.push_error_pos(start, "Number cannot start with 0");
+                    errors.warning(start, "Number cannot start with 0");
+                    // Remove leading zeros
                     num = num.trim_start_matches('0').to_string();
                     if num.is_empty() {
                         num.push('0');
@@ -194,84 +165,78 @@ impl Lexer {
                 }
                 return result(Token::Int(num));
             } else {
+                self.next();
                 match c {
                     '+' => {
-                        self.consume_char();
                         return result(Token::Add);
                     }
                     '-' => {
-                        self.consume_char();
                         return result(Token::Sub);
                     }
                     '*' => {
-                        self.consume_char();
                         return result(Token::Mul);
                     }
                     '/' => {
-                        if self.peek_char() == Some('/') {
-                            while self.peek_char() != Some('\n') {
-                                self.consume_char();
-                            }
+                        if self.peek() == Some('/') {
+                            while self.next() != Some('\n') {}
                             continue;
-                        } else {
-                            self.consume_char();
-                            return result(Token::Div);
                         }
+                        return result(Token::Div);
                     }
                     ':' => {
-                        self.consume_char();
-                        if self.peek_char() == Some('=') {
-                            self.consume_char();
+                        if self.peek() == Some('=') {
+                            self.next();
                             return result(Token::Assign);
                         }
                         return result(Token::Colon);
                     }
                     '<' => {
-                        self.consume_char();
-                        if self.peek_char() == Some('>') {
-                            self.consume_char();
+                        if self.peek() == Some('>') {
+                            self.next();
                             return result(Token::Ne);
-                        } else if self.peek_char() == Some('=') {
-                            self.consume_char();
+                        } else if self.peek() == Some('=') {
+                            self.next();
                             return result(Token::Le);
                         }
                         return result(Token::Lt);
                     }
                     '>' => {
-                        self.consume_char();
-                        if self.peek_char() == Some('=') {
-                            self.consume_char();
+                        if self.peek() == Some('=') {
+                            self.next();
                             return result(Token::Ge);
                         }
                         return result(Token::Gt);
                     }
                     '=' => {
-                        self.consume_char();
                         return result(Token::Eq);
                     }
                     '(' => {
-                        self.consume_char();
                         return result(Token::LParen);
                     }
                     ')' => {
-                        self.consume_char();
                         return result(Token::RParen);
                     }
                     ',' => {
-                        self.consume_char();
                         return result(Token::Comma);
                     }
                     ';' => {
-                        self.consume_char();
                         return result(Token::SemiColon);
                     }
                     c => {
-                        self.push_error(&format!("Unexpected character `{}`", c));
-                        self.consume_char();
+                        errors.error(start, &format!("Unexpected character `{}`", c));
+                        // Skip the character
                     }
                 }
             }
         }
         None
     }
+}
+pub fn lex(input: &str, errors: &mut ErrorRecorder) -> Vec<OffsetToken> {
+    let mut stream = CharStream::new(input);
+    let mut tokens = Vec::new();
+    while let Some(token) = stream.next_token(&mut stream, errors) {
+        tokens.push(token);
+    }
+    tokens
 }
