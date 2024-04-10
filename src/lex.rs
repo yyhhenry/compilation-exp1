@@ -148,7 +148,8 @@ impl CharStream {
                         num.push('0');
                     }
                 }
-                return result(TokenEnum::IntLiteral);
+                let start = self.pos - num.len();
+                return Some((start, TokenEnum::IntLiteral));
             } else {
                 self.next();
                 match c {
