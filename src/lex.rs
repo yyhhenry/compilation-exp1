@@ -25,7 +25,7 @@ pub enum TokenEnum {
     Bool,
     Real,
 
-    // operators +|-|*|/|:=|<|>|<>|>=|<=|=|:|(|)
+    // operators +|-|*|/|:=|<|>|<>|>=|<=|==|:|(|)
     /// +
     Add,
     /// -
@@ -46,7 +46,7 @@ pub enum TokenEnum {
     Ge,
     /// <=
     Le,
-    /// =
+    /// ==
     Eq,
     /// :
     Colon,
@@ -194,7 +194,12 @@ impl CharStream {
                         return result(TokenEnum::Gt);
                     }
                     '=' => {
-                        return result(TokenEnum::Eq);
+                        if self.peek() == Some('=') {
+                            self.next();
+                            return result(TokenEnum::Eq);
+                        }
+                        errors.error(start, "Unexpected operator `=`");
+                        // Skip the character
                     }
                     '(' => {
                         return result(TokenEnum::LParen);

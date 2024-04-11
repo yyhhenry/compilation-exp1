@@ -1,0 +1,8 @@
+var
+    i: integer;
+    b: bool;
+begin
+    i := 0;
+    b := (i == 1);
+    i = i + 1;
+end

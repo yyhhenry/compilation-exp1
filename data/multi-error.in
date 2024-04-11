@@ -21,4 +21,7 @@ begin
     i := 2;
     // undeclared identifier
     c := 3;
+    // Unexpected operator
+    d = 4;
+    d := 4;
 end 
