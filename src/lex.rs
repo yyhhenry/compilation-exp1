@@ -74,6 +74,23 @@ pub struct Token {
     pub content: String,
     pub token: TokenEnum,
 }
+/// To simplify the parser.
+enum NextToken {
+    EOF,
+    Blank,
+    Type(TokenEnum),
+    WithContent(TokenEnum, String),
+}
+impl From<TokenEnum> for NextToken {
+    fn from(token: TokenEnum) -> Self {
+        NextToken::Type(token)
+    }
+}
+impl From<(TokenEnum, String)> for NextToken {
+    fn from((token, content): (TokenEnum, String)) -> Self {
+        NextToken::WithContent(token, content)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct CharStream {
@@ -100,137 +117,144 @@ impl CharStream {
         }
     }
     /// Returns (start, token)
-    fn next_token_base(&mut self, errors: &mut ErrorRecorder) -> Option<(usize, TokenEnum)> {
-        while let Some(c) = self.peek() {
-            if c.is_whitespace() {
-                self.next();
-                continue;
+    fn next_token_base(&mut self, errors: &mut ErrorRecorder) -> NextToken {
+        let c = match self.peek() {
+            Some(c) => c,
+            None => return NextToken::EOF,
+        };
+        if c.is_whitespace() {
+            self.next();
+            return NextToken::Blank;
+        }
+        let start = self.pos;
+        if c.is_ascii_alphabetic() {
+            let mut ident = String::new();
+            while let Some(c) = self.peek() {
+                if c.is_ascii_alphanumeric() {
+                    ident.push(c);
+                    self.next();
+                } else {
+                    break;
+                }
             }
-            let start = self.pos;
-            let result = |token| Some((start, token));
-            if c.is_ascii_alphabetic() {
-                let mut ident = String::new();
-                while self.peek().map_or(false, |c| c.is_ascii_alphanumeric()) {
-                    ident.push(self.next().unwrap());
+            match ident.to_lowercase().as_str() {
+                "var" => TokenEnum::Var,
+                "integer" => TokenEnum::Integer,
+                "longint" => TokenEnum::Longint,
+                "bool" => TokenEnum::Bool,
+                "real" => TokenEnum::Real,
+                "if" => TokenEnum::If,
+                "then" => TokenEnum::Then,
+                "else" => TokenEnum::Else,
+                "while" => TokenEnum::While,
+                "do" => TokenEnum::Do,
+                "begin" => TokenEnum::Begin,
+                "end" => TokenEnum::End,
+                "and" => TokenEnum::And,
+                "or" => TokenEnum::Or,
+                _ => TokenEnum::Identifier,
+            }
+            .into()
+        } else if c.is_numeric() {
+            let mut num = String::new();
+            while self.peek().map_or(false, |c| c.is_numeric()) {
+                num.push(self.next().unwrap());
+            }
+            if self.peek().map_or(false, |c| c.is_ascii_alphabetic()) {
+                errors.error(self.pos, "Unexpected character after number");
+                // Automatically add a space after the number
+            }
+            if num.starts_with('0') && num.len() > 1 {
+                errors.warning(start, "Number should not start with 0");
+                // Remove leading zeros
+                num = num.trim_start_matches('0').to_string();
+                if num.is_empty() {
+                    num.push('0');
                 }
-                let token = match ident.to_lowercase().as_str() {
-                    "var" => TokenEnum::Var,
-                    "integer" => TokenEnum::Integer,
-                    "longint" => TokenEnum::Longint,
-                    "bool" => TokenEnum::Bool,
-                    "real" => TokenEnum::Real,
-                    "if" => TokenEnum::If,
-                    "then" => TokenEnum::Then,
-                    "else" => TokenEnum::Else,
-                    "while" => TokenEnum::While,
-                    "do" => TokenEnum::Do,
-                    "begin" => TokenEnum::Begin,
-                    "end" => TokenEnum::End,
-                    "and" => TokenEnum::And,
-                    "or" => TokenEnum::Or,
-                    _ => TokenEnum::Identifier,
-                };
-                return result(token);
-            } else if c.is_numeric() {
-                let mut num = String::new();
-                while self.peek().map_or(false, |c| c.is_numeric()) {
-                    num.push(self.next().unwrap());
+                return NextToken::WithContent(TokenEnum::IntLiteral, num);
+            }
+            TokenEnum::IntLiteral.into()
+        } else {
+            self.next();
+            match c {
+                '+' => TokenEnum::Add.into(),
+                '-' => TokenEnum::Sub.into(),
+                '*' => TokenEnum::Mul.into(),
+                '/' => {
+                    if self.peek() == Some('/') {
+                        while self.next() != Some('\n') {}
+                        return NextToken::Blank;
+                    }
+                    TokenEnum::Div.into()
                 }
-                if self.peek().map_or(false, |c| c.is_ascii_alphabetic()) {
-                    errors.error(self.pos, "Unexpected character after number");
-                    // Automatically add a space after the number
+                ':' => {
+                    if self.peek() == Some('=') {
+                        self.next();
+                        return TokenEnum::Assign.into();
+                    }
+                    TokenEnum::Colon.into()
                 }
-                if num.starts_with('0') && num.len() > 1 {
-                    errors.warning(start, "Number cannot start with 0");
-                    // Remove leading zeros
-                    num = num.trim_start_matches('0').to_string();
-                    if num.is_empty() {
-                        num.push('0');
+                '<' => {
+                    if self.peek() == Some('>') {
+                        self.next();
+                        return TokenEnum::Ne.into();
+                    } else if self.peek() == Some('=') {
+                        self.next();
+                        return TokenEnum::Le.into();
                     }
+                    TokenEnum::Lt.into()
                 }
-                let start = self.pos - num.len();
-                return Some((start, TokenEnum::IntLiteral));
-            } else {
-                self.next();
-                match c {
-                    '+' => {
-                        return result(TokenEnum::Add);
+                '>' => {
+                    if self.peek() == Some('=') {
+                        self.next();
+                        return TokenEnum::Ge.into();
                     }
-                    '-' => {
-                        return result(TokenEnum::Sub);
+                    TokenEnum::Gt.into()
+                }
+                '=' => {
+                    if self.peek() == Some('=') {
+                        self.next();
+                        return TokenEnum::Eq.into();
                     }
-                    '*' => {
-                        return result(TokenEnum::Mul);
-                    }
-                    '/' => {
-                        if self.peek() == Some('/') {
-                            while self.next() != Some('\n') {}
-                            continue;
-                        }
-                        return result(TokenEnum::Div);
-                    }
-                    ':' => {
-                        if self.peek() == Some('=') {
-                            self.next();
-                            return result(TokenEnum::Assign);
-                        }
-                        return result(TokenEnum::Colon);
-                    }
-                    '<' => {
-                        if self.peek() == Some('>') {
-                            self.next();
-                            return result(TokenEnum::Ne);
-                        } else if self.peek() == Some('=') {
-                            self.next();
-                            return result(TokenEnum::Le);
-                        }
-                        return result(TokenEnum::Lt);
-                    }
-                    '>' => {
-                        if self.peek() == Some('=') {
-                            self.next();
-                            return result(TokenEnum::Ge);
-                        }
-                        return result(TokenEnum::Gt);
-                    }
-                    '=' => {
-                        if self.peek() == Some('=') {
-                            self.next();
-                            return result(TokenEnum::Eq);
-                        }
-                        errors.error(start, "Unexpected operator `=`");
-                        // Skip the character
-                    }
-                    '(' => {
-                        return result(TokenEnum::LParen);
-                    }
-                    ')' => {
-                        return result(TokenEnum::RParen);
-                    }
-                    ',' => {
-                        return result(TokenEnum::Comma);
-                    }
-                    ';' => {
-                        return result(TokenEnum::SemiColon);
-                    }
-                    c => {
-                        errors.error(start, &format!("Unexpected character `{}`", c));
-                        // Skip the character
-                    }
+                    errors.error(start, "Unexpected operator `=`");
+                    NextToken::Blank
+                }
+                '(' => TokenEnum::LParen.into(),
+                ')' => TokenEnum::RParen.into(),
+                ',' => TokenEnum::Comma.into(),
+                ';' => TokenEnum::SemiColon.into(),
+                c => {
+                    errors.error(start, &format!("Unexpected character `{}`", c));
+                    NextToken::Blank
                 }
             }
         }
-        None
     }
 
     pub fn next_token(&mut self, errors: &mut ErrorRecorder) -> Option<Token> {
-        let (offset, token) = self.next_token_base(errors)?;
-        let content = self.input[offset..self.pos].iter().collect();
-        Some(Token {
-            offset,
-            content,
-            token,
-        })
+        loop {
+            let start = self.pos;
+            let next_token = self.next_token_base(errors);
+            match next_token {
+                NextToken::EOF => return None,
+                NextToken::Blank => {}
+                NextToken::Type(token) => {
+                    let content = self.input[start..self.pos].iter().collect();
+                    return Some(Token {
+                        offset: start,
+                        content,
+                        token,
+                    });
+                }
+                NextToken::WithContent(token, content) => {
+                    return Some(Token {
+                        offset: start,
+                        content,
+                        token,
+                    });
+                }
+            }
+        }
     }
 }
 pub fn lex(input: &str, errors: &mut ErrorRecorder) -> Vec<Token> {
