@@ -108,7 +108,12 @@ impl TokenStream {
                 self.next();
             }
             _ => {
-                errors.error(self.peek_pos(), "Missing semicolon");
+                let pos = self
+                    .tokens
+                    .get(self.index - 1)
+                    .map(|t| t.offset + t.content.len())
+                    .unwrap_or(0);
+                errors.error(pos, "Missing semicolon");
             }
         }
         for (identifier, offset) in identifiers {
