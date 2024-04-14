@@ -36,6 +36,9 @@ impl TokenStream {
     pub fn peek(&self) -> Option<&TokenEnum> {
         self.tokens.get(self.index).map(|t| &t.token)
     }
+    pub fn peek_content(&self) -> Option<&str> {
+        self.tokens.get(self.index).map(|t| t.content.as_str())
+    }
     pub fn peek_pos(&self) -> usize {
         self.tokens
             .get(self.index)
@@ -127,8 +130,20 @@ impl TokenStream {
             Some(TokenEnum::Begin) => {
                 return Ok(identifiers);
             }
+            Some(TokenEnum::Identifier) => match self.peek_content() {
+                Some(s) if s.to_lowercase().starts_with("var") => {
+                    errors.error(
+                        self.peek_pos() + "var".len(),
+                        "Did you forget a space after var?",
+                    );
+                    self.tokens[self.index].content = s[3..].to_string();
+                }
+                _ => {
+                    self.expect(TokenEnum::Var, errors)?;
+                }
+            },
             _ => {
-                return errors.hard(self.peek_pos(), "Expected var");
+                self.expect(TokenEnum::Var, errors)?;
             }
         }
         while self.peek().map_or(false, |t| t != &TokenEnum::Begin) {

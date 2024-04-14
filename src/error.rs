@@ -87,10 +87,7 @@ impl ErrorRecorder {
     }
     pub fn hard<T>(&mut self, offset: usize, msg: impl AsRef<str>) -> Result<T> {
         let msg = msg.as_ref().to_string();
-        self.errors.push(OffsetError {
-            offset,
-            msg: msg.clone(),
-        });
+        self.error(offset, msg.clone());
         Err(anyhow!(msg))
     }
     pub fn error(&mut self, offset: usize, msg: impl AsRef<str>) {

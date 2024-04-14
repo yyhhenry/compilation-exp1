@@ -1,5 +1,4 @@
-var
-    i: integer;
+vari: integer;
 
     // duplicate identifier
     i: integer; 

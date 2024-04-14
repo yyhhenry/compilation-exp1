@@ -216,7 +216,7 @@ impl CharStream {
                         self.next();
                         return TokenEnum::Eq.into();
                     }
-                    errors.error(start, "Unexpected operator `=`");
+                    errors.error(start, "Unexpected operator `=`. Did you mean `==` or `:=`?");
                     NextToken::Blank
                 }
                 '(' => TokenEnum::LParen.into(),
