@@ -161,8 +161,8 @@ impl CharStream {
                 num.push(self.next().unwrap());
             }
             if self.peek().map_or(false, |c| c.is_ascii_alphabetic()) {
-                errors.error(self.pos, "Unexpected character after number");
-                // Automatically add a space after the number
+                errors.error(start, "Identifier should not start with a number.");
+                return NextToken::Blank;
             }
             if num.starts_with('0') && num.len() > 1 {
                 errors.warning(start, "Number should not start with 0");
