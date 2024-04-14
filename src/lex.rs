@@ -161,7 +161,13 @@ impl CharStream {
                 num.push(self.next().unwrap());
             }
             if self.peek().map_or(false, |c| c.is_ascii_alphabetic()) {
-                errors.error(start, "Identifier should not start with a number.");
+                errors.error(
+                    start,
+                    &format!(
+                        "Identifier should not start with a number. Consider removing `{}`",
+                        num
+                    ),
+                );
                 return NextToken::Blank;
             }
             if num.starts_with('0') && num.len() > 1 {
